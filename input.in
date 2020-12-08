@@ -1,0 +1,7 @@
+dim = 2
+two_dimensional_problem_type = plane_stress
+E = 3E+7
+nu = 0.3
+mesh_path = ./mesh/single-quad.msh
+
+
