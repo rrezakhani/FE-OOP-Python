@@ -49,12 +49,15 @@ node_list = np.array(mesh.get_nodes()).astype(np.float)
 U = np.zeros(num_nodes*dim)
 
 ##############################################################################
-# Apply boundary conditions
+# Define boundary conditions
 blocked = np.zeros(num_nodes*dim)
+u_bar = np.zeros(num_nodes*dim)
 for i in range(num_nodes):
     if(node_list[i][0] == 0.0):
         blocked[2*i] = 1
+        u_bar[2*i] = 0.0
         blocked[2*i+1] = 1
+        u_bar[2*i+1] = 0.0
         
 ##############################################################################        
 # Construct global stiffness matrix
@@ -65,27 +68,53 @@ np.savetxt("stiffness_matrix.txt", K)
 ##############################################################################   
 # Construct the external force vector
 F_ext = np.zeros(num_nodes*dim)
-F_ext[1] = -20
-F_ext[-1] = -20
+F_ext[4] = -20.0
+F_ext[6] = -20.0
+
+# Construct the reaction force vector
+R_ext = np.zeros(num_nodes*dim)
 
 ##############################################################################   
 # Iterative solve of the equilibruim equation
 # Newton Raphson Method
-num_load_steps = 1
-itr_max = 1
+num_load_steps = 2
+itr_max = 10
 itr_tol = 1E-5
 res = np.zeros(num_nodes*dim)
 F_int = np.zeros(num_nodes*dim)
+
 for l in range(num_load_steps):
-    F_ext = F_ext
-    res = F_int - F_ext
+    
+    F_ext += F_ext
+    res = F_int - F_ext - R_ext
+    
+    #=====================================================================
+    # Impose essential boundary conditions
+    K_temp = np.copy(K)
+    for m in range(num_nodes*dim):
+        if(blocked[m]==1):
+            for n in range(num_nodes*dim):
+                res[n] -= K[n,m] * u_bar[m]
+            K_temp[m,:] = 0.0
+            K_temp[:,m] = 0.0
+            K_temp[m,m] = 1.0
+            res[m] = u_bar[m]
+            
+    #=====================================================================
+    # Loop on iterations 
+    max_itr_reached = False
     for k in range(itr_max):
-        dU = np.dot(inv(K), -res)
-        U = U + dU
         
-        #=====================================================================
-        # Apply DCs
-        U[0]=U[1]=U[2]=U[3]=0
+        # calculate displacement vector increment
+        dU = np.dot(inv(K_temp), -res)
+        
+        # update the reaction forces
+        for m in range(num_nodes*dim):
+            if(blocked[m]==1):
+                R_ext[m] += np.dot(K[m,:], dU)
+        
+        # update the displacement field
+        U = U + dU
         
         #=====================================================================
         # Internal force vector calculation
@@ -103,12 +132,14 @@ for l in range(num_load_steps):
                 Le = np.concatenate((Le, [2*elem_list[e][i+2]-1, 2*elem_list[e][i+2]]))
             Le = Le.astype(np.int)
                 
-            u_elem = U[Le-1]
+            du_elem = dU[Le-1]
             for p in range(len(qp)):            
                 xi  = qp[p][0]
                 eta = qp[p][1]
                 
-                N = 1/4 * np.array([(1-xi)*(1-eta), (1+xi)*(1-eta), (1+xi)*(1+eta), (1-xi)*(1+eta)])
+                N = 1/4 * np.array([(1-xi)*(1-eta), (1+xi)*(1-eta), 
+                                    (1+xi)*(1+eta), (1-xi)*(1+eta)])
+                
                 dNdxi = 1/4 * np.array([[-(1-eta), -(1-xi)],
                                         [ (1-eta), -(1+xi)],
                                         [ (1+eta),  (1+xi)],
@@ -122,27 +153,34 @@ for l in range(num_load_steps):
                 B[1, 1:2*neN+1:2] = dNdx[1,:]
                 B[2, 0:2*neN+1:2] = dNdx[1,:]
                 B[2, 1:2*neN+1:2] = dNdx[0,:]
-            
-                eps_qp = np.zeros((3,1))
-                eps_qp = np.dot(B, u_elem)
-                sig_qp = np.zeros((3,1))
-                sig_qp = np.dot(C, eps_qp)
-                Fint_qp = np.dot(np.transpose(B), sig_qp) * w_qp[p] * np.linalg.det(J0)
+                
+                deps_qp = np.zeros((3,1))
+                deps_qp = np.dot(B, du_elem)
+                
+                dsig_qp = np.zeros((3,1))
+                dsig_qp = np.dot(C, deps_qp)
+                
+                dFint_qp = np.dot(np.transpose(B), dsig_qp) * w_qp[p] * np.linalg.det(J0)
             
                 for i in range(len(Le)):
-                        F_int[Le[i]-1] = F_int[Le[i]-1] + Fint_qp[i]
+                        F_int[Le[i]-1] = F_int[Le[i]-1] + dFint_qp[i]
         
         #=====================================================================
-        res = F_int - F_ext
+        # update residual and check convergence
+        res = F_int - F_ext - R_ext        
         tol = np.linalg.norm(res)/np.linalg.norm(F_ext)
-        print("Load step {} - Iteration {} - tolerance = {}".format(i, k, tol))
+        
+        # printing iteration information
+        print("Load step {} - Iteration {} - tolerance = {}".format(l+1, k+1, tol))
         if (tol < itr_tol):
             print("Solution converged!")
-            break
+            break # break out of the iteration loop to the next load step
         if (k == itr_max-1):
-            print("Maximum number of iteration is reached. Solution did NOT converge!")
-            break
-    
+            print("Maximum number of iteration is reached! Solution did NOT converge!")
+            max_itr_reached = True
+            break # break out of the iteration loop
+    if(max_itr_reached):
+        break # break out of the load step loop
     
     
     
