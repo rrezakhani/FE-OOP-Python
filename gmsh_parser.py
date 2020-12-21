@@ -38,7 +38,8 @@ class gmsh_parser:
                     line = mesh_file.readline()
                     if(self.dim == 2):
                         self.nodes.append([line.split(' ')[1],
-                                           line.split(' ')[2]]) 
+                                           line.split(' ')[2],
+                                           line.split(' ')[3]]) 
                     elif(self.dim == 3):
                         self.nodes.append([line.split(' ')[1],
                                            line.split(' ')[2],
@@ -50,13 +51,13 @@ class gmsh_parser:
                     line = mesh_file.readline()
                     if(self.dim == 2):
                         if (line.split(' ')[1] == '1'):
-                            self.bndry_elems.append([line.split(' ')[1],
-                                                     line.split(' ')[3],
+                            self.bndry_elems.append([line.split(' ')[1], # gmsh element type
+                                                     line.split(' ')[3], # phys. tag 
                                                      line.split(' ')[-2],
                                                      line.split(' ')[-1]])
                         elif (line.split(' ')[1] == '3'):
-                            self.elems.append([line.split(' ')[1], 
-                                               line.split(' ')[3],
+                            self.elems.append([line.split(' ')[1], # gmsh element type
+                                               line.split(' ')[3], # phys. tag
                                                line.split(' ')[-4],
                                                line.split(' ')[-3],
                                                line.split(' ')[-2],
@@ -65,6 +66,9 @@ class gmsh_parser:
         self.num_elems = len(self.elems)        
                
                 
+    def get_dim(self):
+        return self.dim
+    
     def get_nodes(self):
         return self.nodes
     
@@ -73,6 +77,9 @@ class gmsh_parser:
     
     def get_elems(self):
         return self.elems
+    
+    def get_num_elems(self):
+        return int(self.num_elems)
     
     def get_bndry_elems(self):
         return self.bndry_elems

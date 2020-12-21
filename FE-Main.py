@@ -12,6 +12,7 @@ from numpy.linalg import inv
 from gmsh_parser import gmsh_parser
 from materials.material import material
 from stiffness_matrix import global_stiffness_matrix
+from vtk_writer import vtk_writer
 
 ##############################################################################
 # Read the input file 
@@ -48,6 +49,12 @@ node_list = np.array(mesh.get_nodes()).astype(np.float)
 # Initialize global displacement vector
 U = np.zeros(num_nodes*dim)
 
+##############################################################################        
+# Construct global stiffness matrix
+K = np.zeros((num_nodes*dim, num_nodes*dim))
+global_stiffness_matrix(K, mat, mesh)
+#np.savetxt("stiffness_matrix.txt", K)
+
 ##############################################################################
 # Define boundary conditions
 blocked = np.zeros(num_nodes*dim)
@@ -58,18 +65,13 @@ for i in range(num_nodes):
         u_bar[2*i] = 0.0
         blocked[2*i+1] = 1
         u_bar[2*i+1] = 0.0
-        
-##############################################################################        
-# Construct global stiffness matrix
-K = np.zeros((num_nodes*dim, num_nodes*dim))
-global_stiffness_matrix(K, mat, mesh)
-np.savetxt("stiffness_matrix.txt", K)
 
 ##############################################################################   
 # Construct the external force vector
 F_ext = np.zeros(num_nodes*dim)
-F_ext[4] = -20.0
-F_ext[6] = -20.0
+F_ext[2] = 20.0
+F_ext[4] = 20.0
+F_ext[10] = 20.0
 
 # Construct the reaction force vector
 R_ext = np.zeros(num_nodes*dim)
@@ -77,7 +79,7 @@ R_ext = np.zeros(num_nodes*dim)
 ##############################################################################   
 # Iterative solve of the equilibruim equation
 # Newton Raphson Method
-num_load_steps = 2
+num_load_steps = 5
 itr_max = 10
 itr_tol = 1E-5
 res = np.zeros(num_nodes*dim)
@@ -119,7 +121,7 @@ for l in range(num_load_steps):
         #=====================================================================
         # Internal force vector calculation
         for e in range(len(elem_list)):         
-            nodes = node_list[elem_list[e][2:]-1][:]
+            nodes = node_list[elem_list[e][2:]-1][:,:dim]
             neN = len(nodes)
             w_qp = np.array([1, 1, 1, 1])
             qp = np.array([[ 0.5774,  0.5774],
@@ -182,7 +184,9 @@ for l in range(num_load_steps):
     if(max_itr_reached):
         break # break out of the load step loop
     
-    
+    #=====================================================================
+    # write vtk file   
+    vtk_writer("./results", l, mesh, U)
     
     
     
