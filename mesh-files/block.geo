@@ -2,8 +2,8 @@ Mesh.MshFileVersion = 2.2;
 
 Nb_elems = 1;
 
-x_size = 0.1;
-y_size = 0.1;
+x_size = 1;
+y_size = 1;
 
 h_e = x_size/Nb_elems;
 

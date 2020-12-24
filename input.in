@@ -1,7 +1,18 @@
+# problem dimensions
 dim = 2
 two_dimensional_problem_type = plane_stress
+
+# material properties
 E = 3E+7
 nu = 0.3
+
+# boundary conditions
+# format: [value (space) direction (space) gmsh_physcial_surface_name]
+Dirichlet_BC = [0.001 1 'right']
+Dirichlet_BC = [0.0 1 'left']
+Dirichlet_BC = [0.0 2 'left']
+
+# mesh file
 mesh_path = ./mesh-files/block.msh
 
 

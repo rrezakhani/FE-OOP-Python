@@ -18,6 +18,8 @@ from vtk_writer import vtk_writer
 # Read the input file 
 input_file = open("./input.in", 'r')
 line = input_file.readline()
+disp_BC = []
+trac_BC = []
 while (line != ''):  # breaks when EOF is reached
     key = line.split(' ')[0]
     if (key == 'dim'):
@@ -30,8 +32,12 @@ while (line != ''):  # breaks when EOF is reached
         nu = float(line.split(' ')[-1])            
     if (key == 'mesh_path'):
         mesh_path = line.split(' ')[-1].split('\n')[0]
+    if (key == 'Dirichlet_BC'):
+        disp_BC.append([line.split(' ')[-3][1:], 
+                        line.split(' ')[-2], 
+                        line.split(' ')[-1].split('\n')[0][1:-2]])
     line = input_file.readline()    
-
+  
 ##############################################################################
 # Instantiate material class and initialize material properties
 mat = material(E, nu, dim, two_dimensional_problem_type)
@@ -56,22 +62,28 @@ global_stiffness_matrix(K, mat, mesh)
 #np.savetxt("stiffness_matrix.txt", K)
 
 ##############################################################################
-# Define boundary conditions
+# Boundary conditions arrays
 blocked = np.zeros(num_nodes*dim)
 u_bar = np.zeros(num_nodes*dim)
-for i in range(num_nodes):
-    if(node_list[i][0] == 0.0):
-        blocked[2*i] = 1
-        u_bar[2*i] = 0.0
-        blocked[2*i+1] = 1
-        u_bar[2*i+1] = 0.0
+
+# Apply prescribed boundary conditions
+phys_array = mesh.get_phys_array()
+bndry_elems = np.array(mesh.get_bndry_elems()).astype(np.int)   
+ 
+for d_BC in disp_BC:
+    val = float(d_BC[0])
+    comp = int(d_BC[1])
+    phys_tag = d_BC[2]
+    for i in range(len(phys_array)):
+        if(phys_array[i][2] == phys_tag):
+            phys_index = int(phys_array[i][1])
+    phys_elems = bndry_elems[bndry_elems[:,1]==phys_index][:,2:]
+    blocked[2*(np.unique(phys_elems)-1)+comp-1] = 1
+    u_bar[2*(np.unique(phys_elems)-1)+comp-1] = val
 
 ##############################################################################   
 # Construct the external force vector
 F_ext = np.zeros(num_nodes*dim)
-F_ext[2] = 20.0
-F_ext[4] = 20.0
-F_ext[10] = 20.0
 
 # Construct the reaction force vector
 R_ext = np.zeros(num_nodes*dim)
@@ -79,16 +91,25 @@ R_ext = np.zeros(num_nodes*dim)
 ##############################################################################   
 # Iterative solve of the equilibruim equation
 # Newton Raphson Method
-num_load_steps = 5
-itr_max = 10
+num_load_steps = 1
+itr_max = 1
 itr_tol = 1E-5
+
 res = np.zeros(num_nodes*dim)
 F_int = np.zeros(num_nodes*dim)
+F_ext_ = np.zeros(num_nodes*dim)
+u_bar_ = np.zeros(num_nodes*dim)
 
 for l in range(num_load_steps):
     
-    F_ext += F_ext
-    res = F_int - F_ext - R_ext
+    #=====================================================================
+    # update essential and neumann boundary conditions
+    u_bar_ = 1/num_load_steps * u_bar
+    F_ext_ += 1/num_load_steps * F_ext
+    
+    #=====================================================================
+    # compute residual   
+    res = F_ext_ + R_ext - F_int
     
     #=====================================================================
     # Impose essential boundary conditions
@@ -96,19 +117,20 @@ for l in range(num_load_steps):
     for m in range(num_nodes*dim):
         if(blocked[m]==1):
             for n in range(num_nodes*dim):
-                res[n] -= K[n,m] * u_bar[m]
+                if(blocked[n]==0):
+                    res[n] -= K[n,m] * u_bar_[m]
             K_temp[m,:] = 0.0
             K_temp[:,m] = 0.0
             K_temp[m,m] = 1.0
-            res[m] = u_bar[m]
-            
+            res[m] = u_bar_[m]
+    
     #=====================================================================
     # Loop on iterations 
     max_itr_reached = False
     for k in range(itr_max):
         
         # calculate displacement vector increment
-        dU = np.dot(inv(K_temp), -res)
+        dU = np.dot(inv(K_temp), res)    
         
         # update the reaction forces
         for m in range(num_nodes*dim):
@@ -169,8 +191,8 @@ for l in range(num_load_steps):
         
         #=====================================================================
         # update residual and check convergence
-        res = F_int - F_ext - R_ext        
-        tol = np.linalg.norm(res)/np.linalg.norm(F_ext)
+        res = F_ext_ + R_ext - F_int        
+        tol = np.linalg.norm(res)/np.linalg.norm(F_ext_ + R_ext)
         
         # printing iteration information
         print("Load step {} - Iteration {} - tolerance = {}".format(l+1, k+1, tol))

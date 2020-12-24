@@ -30,7 +30,9 @@ class gmsh_parser:
                 self.num_phys_names = mesh_file.readline()
                 for i in range(int(self.num_phys_names)):
                     line = mesh_file.readline()
-                    self.phys_array.append(line.split(' ')) 
+                    self.phys_array.append([line.split(' ')[0],
+                                            line.split(' ')[1],
+                                            line.split(' ')[2].split('\n')[0][1:-1]]) 
                 
             if("$Nodes" in  line):
                 self.num_nodes = mesh_file.readline()
@@ -54,7 +56,7 @@ class gmsh_parser:
                             self.bndry_elems.append([line.split(' ')[1], # gmsh element type
                                                      line.split(' ')[3], # phys. tag 
                                                      line.split(' ')[-2],
-                                                     line.split(' ')[-1]])
+                                                     line.split(' ')[-1].split('\n')[0]])
                         elif (line.split(' ')[1] == '3'):
                             self.elems.append([line.split(' ')[1], # gmsh element type
                                                line.split(' ')[3], # phys. tag
@@ -83,4 +85,7 @@ class gmsh_parser:
     
     def get_bndry_elems(self):
         return self.bndry_elems
+        
+    def get_phys_array(self):
+        return self.phys_array
     
