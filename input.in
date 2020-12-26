@@ -8,11 +8,15 @@ nu = 0.3
 
 # boundary conditions
 # format: [value (space) direction (space) gmsh_physcial_surface_name]
-Dirichlet_BC = [0.001 1 'right']
+Dirichlet_BC = [0.004 1 'right']
 Dirichlet_BC = [0.0 1 'left']
 Dirichlet_BC = [0.0 2 'left']
 
 # mesh file
-mesh_path = ./mesh-files/block.msh
+mesh_path = ./mesh-files/dogbone.msh
+
+# sprcify analysis type
+analysis_type = static
+solver = Newton-Raphson
 
 

@@ -9,10 +9,11 @@
 
 import numpy as np
 from numpy.linalg import inv
-from gmsh_parser import gmsh_parser
-from materials.material import material
-from stiffness_matrix import global_stiffness_matrix
-from vtk_writer import vtk_writer
+
+from src.solid_mechanics_model import solid_mechanics_model
+from src.gmsh_parser import gmsh_parser
+from src.materials.material import material
+from src.vtk_writer import vtk_writer
 
 ##############################################################################
 # Read the input file 
@@ -36,12 +37,11 @@ while (line != ''):  # breaks when EOF is reached
         disp_BC.append([line.split(' ')[-3][1:], 
                         line.split(' ')[-2], 
                         line.split(' ')[-1].split('\n')[0][1:-2]])
+    if (key == 'analysis_type'):
+        analysis_type = line.split(' ')[-1].split('\n')[0]
+    if (key == 'solver'):
+        solver = line.split(' ')[-1].split('\n')[0]
     line = input_file.readline()    
-  
-##############################################################################
-# Instantiate material class and initialize material properties
-mat = material(E, nu, dim, two_dimensional_problem_type)
-C = mat.get_C()
 
 ##############################################################################
 # Create the mesh object
@@ -52,17 +52,28 @@ elem_list = np.array(mesh.get_elems()).astype(np.int)
 node_list = np.array(mesh.get_nodes()).astype(np.float)
 
 ##############################################################################
+# Instantiate material class and initialize material properties
+mat = material(E, nu, dim, two_dimensional_problem_type)
+C = mat.get_C()
+
+##############################################################################
+# Instantiate model class to build the general framework
+solid_mechanics_model = solid_mechanics_model(mat, mesh)
+
+##############################################################################
 # Initialize global displacement vector
 U = np.zeros(num_nodes*dim)
 
 ##############################################################################        
 # Construct global stiffness matrix
-K = np.zeros((num_nodes*dim, num_nodes*dim))
-global_stiffness_matrix(K, mat, mesh)
+#K = np.zeros((num_nodes*dim, num_nodes*dim))
+#global_stiffness_matrix(K, mat, mesh)
 #np.savetxt("stiffness_matrix.txt", K)
 
+K = solid_mechanics_model.construct_stiffness_matrix()
+
 ##############################################################################
-# Boundary conditions arrays
+# Boundary condition arrays
 blocked = np.zeros(num_nodes*dim)
 u_bar = np.zeros(num_nodes*dim)
 
@@ -91,8 +102,8 @@ R_ext = np.zeros(num_nodes*dim)
 ##############################################################################   
 # Iterative solve of the equilibruim equation
 # Newton Raphson Method
-num_load_steps = 1
-itr_max = 1
+num_load_steps = 5
+itr_max = 10
 itr_tol = 1E-5
 
 res = np.zeros(num_nodes*dim)
