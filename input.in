@@ -15,7 +15,7 @@ Dirichlet_BC = [0.0 2 'left']
 # mesh file
 mesh_path = ./mesh-files/dogbone.msh
 
-# sprcify analysis type
+# specify analysis type
 analysis_type = static
 solver = Newton-Raphson
 

@@ -11,6 +11,7 @@ import numpy as np
 from numpy.linalg import inv
 
 from src.solid_mechanics_model import solid_mechanics_model
+from src.element import element
 from src.gmsh_parser import gmsh_parser
 from src.materials.material import material
 from src.vtk_writer import vtk_writer
@@ -66,10 +67,6 @@ U = np.zeros(num_nodes*dim)
 
 ##############################################################################        
 # Construct global stiffness matrix
-#K = np.zeros((num_nodes*dim, num_nodes*dim))
-#global_stiffness_matrix(K, mat, mesh)
-#np.savetxt("stiffness_matrix.txt", K)
-
 K = solid_mechanics_model.construct_stiffness_matrix()
 
 ##############################################################################
@@ -154,40 +151,32 @@ for l in range(num_load_steps):
         #=====================================================================
         # Internal force vector calculation
         for e in range(len(elem_list)):         
+            
             nodes = node_list[elem_list[e][2:]-1][:,:dim]
             neN = len(nodes)
+            
+            element_gmsh_type = elem_list[e,0]
+            elem = element(element_gmsh_type, neN, dim)
+            
             w_qp = np.array([1, 1, 1, 1])
             qp = np.array([[ 0.5774,  0.5774],
                            [ 0.5774, -0.5774],
                            [-0.5774,  0.5774],
                            [-0.5774, -0.5774]])
-      
+            
+            # Element connectivity
             Le = np.array([])
             for i in range(elem_list.shape[1]-2): 
                 Le = np.concatenate((Le, [2*elem_list[e][i+2]-1, 2*elem_list[e][i+2]]))
             Le = Le.astype(np.int)
-                
+            
             du_elem = dU[Le-1]
             for p in range(len(qp)):            
                 xi  = qp[p][0]
                 eta = qp[p][1]
                 
-                N = 1/4 * np.array([(1-xi)*(1-eta), (1+xi)*(1-eta), 
-                                    (1+xi)*(1+eta), (1-xi)*(1+eta)])
-                
-                dNdxi = 1/4 * np.array([[-(1-eta), -(1-xi)],
-                                        [ (1-eta), -(1+xi)],
-                                        [ (1+eta),  (1+xi)],
-                                        [-(1+eta),  (1-xi)]])
-
-                J0 = np.dot(np.transpose(dNdxi), nodes)
-                invJ0 = inv(J0)
-                dNdx = np.dot(invJ0, np.transpose(dNdxi))       
-                B = np.zeros((3, 2*neN))
-                B[0, 0:2*neN+1:2] = dNdx[0,:]
-                B[1, 1:2*neN+1:2] = dNdx[1,:]
-                B[2, 0:2*neN+1:2] = dNdx[1,:]
-                B[2, 1:2*neN+1:2] = dNdx[0,:]
+                # compute B matrix and Jacobian of the current element 
+                B, J0 = elem.compute_B_matrix(xi, eta, nodes)
                 
                 deps_qp = np.zeros((3,1))
                 deps_qp = np.dot(B, du_elem)
