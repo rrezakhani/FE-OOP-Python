@@ -52,6 +52,22 @@ num_nodes = mesh.get_num_nodes()
 elem_list = np.array(mesh.get_elems()).astype(np.int)
 node_list = np.array(mesh.get_nodes()).astype(np.float)
 
+elem_obj_list = []
+for e in range(len(elem_list)):
+    
+    nodes = node_list[elem_list[e][2:]-1][:,:dim]
+    neN = len(nodes)
+    element_gmsh_type = elem_list[e,0]
+    
+    # Element connectivity
+    Le = np.array([])
+    for i in range(elem_list.shape[1]-2): 
+        Le = np.concatenate((Le, [2*elem_list[e][i+2]-1, 2*elem_list[e][i+2]]))
+    Le = Le.astype(np.int)
+    
+    elem_obj = element(element_gmsh_type, neN, dim, nodes, Le)
+    elem_obj_list.append(elem_obj)
+
 ##############################################################################
 # Instantiate material class and initialize material properties
 mat = material(E, nu, dim, two_dimensional_problem_type)
@@ -150,13 +166,7 @@ for l in range(num_load_steps):
         
         #=====================================================================
         # Internal force vector calculation
-        for e in range(len(elem_list)):         
-            
-            nodes = node_list[elem_list[e][2:]-1][:,:dim]
-            neN = len(nodes)
-            
-            element_gmsh_type = elem_list[e,0]
-            elem = element(element_gmsh_type, neN, dim)
+        for elem_obj in elem_obj_list:         
             
             w_qp = np.array([1, 1, 1, 1])
             qp = np.array([[ 0.5774,  0.5774],
@@ -164,19 +174,13 @@ for l in range(num_load_steps):
                            [-0.5774,  0.5774],
                            [-0.5774, -0.5774]])
             
-            # Element connectivity
-            Le = np.array([])
-            for i in range(elem_list.shape[1]-2): 
-                Le = np.concatenate((Le, [2*elem_list[e][i+2]-1, 2*elem_list[e][i+2]]))
-            Le = Le.astype(np.int)
-            
-            du_elem = dU[Le-1]
+            du_elem = dU[elem_obj.Le-1]
             for p in range(len(qp)):            
                 xi  = qp[p][0]
                 eta = qp[p][1]
                 
                 # compute B matrix and Jacobian of the current element 
-                B, J0 = elem.compute_B_matrix(xi, eta, nodes)
+                B, J0 = elem_obj.compute_B_J_matrices(xi, eta)
                 
                 deps_qp = np.zeros((3,1))
                 deps_qp = np.dot(B, du_elem)
@@ -186,8 +190,8 @@ for l in range(num_load_steps):
                 
                 dFint_qp = np.dot(np.transpose(B), dsig_qp) * w_qp[p] * np.linalg.det(J0)
             
-                for i in range(len(Le)):
-                        F_int[Le[i]-1] = F_int[Le[i]-1] + dFint_qp[i]
+                for i in range(len(elem_obj.Le)):
+                        F_int[elem_obj.Le[i]-1] = F_int[elem_obj.Le[i]-1] + dFint_qp[i]
         
         #=====================================================================
         # update residual and check convergence

@@ -30,18 +30,18 @@ class solid_mechanics_model:
                         
             nodes = node_list[elem_list[e][2:]-1][:,:dim]
             neN = len(nodes)
-            
             element_gmsh_type = elem_list[e,0]
-            elem = element(element_gmsh_type, neN, dim)
             
             # Element connectivity
             Le = np.array([])
             for i in range(elem_list.shape[1]-2): # 2 is the first two columns about element type and phys tag
                 Le = np.concatenate((Le, [2*elem_list[e][i+2]-1, 2*elem_list[e][i+2]]))
             Le = Le.astype(np.int)
-    
+            
+            elem = element(element_gmsh_type, neN, dim, nodes, Le)
+            
             # Element stiffness matrix        
-            K_elem = elem.compute_element_stiffness(nodes, Le, C)
+            K_elem = elem.compute_element_stiffness(C)
                 
             for i in range(len(Le)):
                 for j in range(len(Le)): 
