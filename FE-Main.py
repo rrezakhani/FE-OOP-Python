@@ -75,7 +75,7 @@ C = mat.get_C()
 
 ##############################################################################
 # Instantiate model class to build the general framework
-solid_mechanics_model = solid_mechanics_model(mat, mesh)
+solid_mechanics_model = solid_mechanics_model(mat, mesh, dim)
 
 ##############################################################################
 # Initialize global displacement vector
@@ -118,9 +118,8 @@ R_ext = np.zeros(num_nodes*dim)
 num_load_steps = 5
 itr_max = 10
 itr_tol = 1E-5
-
-res = np.zeros(num_nodes*dim)
 F_int = np.zeros(num_nodes*dim)
+res = np.zeros(num_nodes*dim)
 F_ext_ = np.zeros(num_nodes*dim)
 u_bar_ = np.zeros(num_nodes*dim)
 
@@ -163,37 +162,10 @@ for l in range(num_load_steps):
         
         # update the displacement field
         U = U + dU
+               
+        # compute internal forces vector (dim: total_num_nodes * dim)
+        F_int = solid_mechanics_model.compute_internal_forces(U, dU)
         
-        #=====================================================================
-        # Internal force vector calculation
-        for elem_obj in elem_obj_list:         
-            
-            w_qp = np.array([1, 1, 1, 1])
-            qp = np.array([[ 0.5774,  0.5774],
-                           [ 0.5774, -0.5774],
-                           [-0.5774,  0.5774],
-                           [-0.5774, -0.5774]])
-            
-            du_elem = dU[elem_obj.Le-1]
-            for p in range(len(qp)):            
-                xi  = qp[p][0]
-                eta = qp[p][1]
-                
-                # compute B matrix and Jacobian of the current element 
-                B, J0 = elem_obj.compute_B_J_matrices(xi, eta)
-                
-                deps_qp = np.zeros((3,1))
-                deps_qp = np.dot(B, du_elem)
-                
-                dsig_qp = np.zeros((3,1))
-                dsig_qp = np.dot(C, deps_qp)
-                
-                dFint_qp = np.dot(np.transpose(B), dsig_qp) * w_qp[p] * np.linalg.det(J0)
-            
-                for i in range(len(elem_obj.Le)):
-                        F_int[elem_obj.Le[i]-1] = F_int[elem_obj.Le[i]-1] + dFint_qp[i]
-        
-        #=====================================================================
         # update residual and check convergence
         res = F_ext_ + R_ext - F_int        
         tol = np.linalg.norm(res)/np.linalg.norm(F_ext_ + R_ext)
