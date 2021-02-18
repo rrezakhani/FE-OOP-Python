@@ -11,14 +11,14 @@ import numpy as np
 from numpy.linalg import inv
 
 from src.solid_mechanics_model import solid_mechanics_model
-from src.element import element
+from src.element_PF import element_PF
 from src.gmsh_parser import gmsh_parser
-from src.materials.material import material
+from src.materials.material_PF import material_PF
 from src.vtk_writer import vtk_writer
 
 ##############################################################################
 # Read the input file 
-input_file = open("./input.in", 'r')
+input_file = open("./input-PhaseField.in", 'r')
 line = input_file.readline()
 disp_BC = []
 trac_BC = []
@@ -31,7 +31,11 @@ while (line != ''):  # breaks when EOF is reached
     if (key == 'E'):
         E = float(line.split(' ')[-1])
     if (key == 'nu'):
-        nu = float(line.split(' ')[-1])            
+        nu = float(line.split(' ')[-1])    
+    if (key == 'Gc'):
+        Gc = float(line.split(' ')[-1])
+    if (key == 'el'):
+        el = float(line.split(' ')[-1])         
     if (key == 'mesh_path'):
         mesh_path = line.split(' ')[-1].split('\n')[0]
     if (key == 'Dirichlet_BC'):
@@ -61,16 +65,19 @@ for e in range(len(elem_list)):
     
     # Element connectivity
     Le = np.array([])
+    LePF = np.array([])
     for i in range(elem_list.shape[1]-2): 
         Le = np.concatenate((Le, [2*elem_list[e][i+2]-1, 2*elem_list[e][i+2]]))
+        LePF = np.concatenate((LePF, [elem_list[e][i+2]]))
     Le = Le.astype(np.int)
+    LePF = LePF.astype(np.int)
     
-    elem_obj = element(element_gmsh_type, neN, dim, nodes, Le)
+    elem_obj = element_PF(element_gmsh_type, neN, dim, nodes, Le, LePF)
     elem_obj_list.append(elem_obj)
 
 ##############################################################################
 # Instantiate material class and initialize material properties
-mat = material(E, nu, dim, two_dimensional_problem_type)
+mat = material_PF(E, nu, Gc, el, dim, two_dimensional_problem_type)
 C = mat.get_C()
 
 ##############################################################################
@@ -113,9 +120,15 @@ F_ext = np.zeros(num_nodes*dim)
 R_ext = np.zeros(num_nodes*dim)
 
 ##############################################################################   
+# Construct PF (phase field) related variables
+phi = np.zeros(num_nodes)
+K_phi = np.zeros((num_nodes, num_nodes))
+res_phi = np.zeros(num_nodes)
+
+##############################################################################   
 # Iterative solve of the equilibruim equation
 # Newton Raphson Method
-num_load_steps = 5
+num_load_steps = 50
 itr_max = 10
 itr_tol = 1E-5
 F_int = np.zeros(num_nodes*dim)
@@ -131,8 +144,12 @@ for l in range(num_load_steps):
     F_ext_ += 1/num_load_steps * F_ext
     
     #=====================================================================
-    # compute residual   
+    # compute residual of the displacement governing equation
     res = F_ext_ + R_ext - F_int
+
+    #=====================================================================
+    # update stiffness matrix of the displacement governing equation
+    K = solid_mechanics_model.update_PF_stiffness_matrix(phi)
     
     #=====================================================================
     # Impose essential boundary conditions
@@ -148,7 +165,7 @@ for l in range(num_load_steps):
             res[m] = u_bar_[m]
     
     #=====================================================================
-    # Loop on iterations 
+    # Loop on iterations for the DISPLACEMENT governing equation
     max_itr_reached = False
     for k in range(itr_max):
         
@@ -163,8 +180,8 @@ for l in range(num_load_steps):
         # update the displacement field
         U = U + dU
                
-        # compute internal forces vector (dim: total_num_nodes * dim)
-        F_int = solid_mechanics_model.compute_internal_forces(U, dU)
+        # compute internal forces vector
+        F_int = solid_mechanics_model.compute_PF_internal_forces(U, dU, phi)
         
         # update residual and check convergence
         res = F_ext_ + R_ext - F_int        
@@ -173,10 +190,49 @@ for l in range(num_load_steps):
         # printing iteration information
         print("Load step {} - Iteration {} - tolerance = {}".format(l+1, k+1, tol))
         if (tol < itr_tol):
-            print("Solution converged!")
+            print("Displacement solve converged!")
             break # break out of the iteration loop to the next load step
         if (k == itr_max-1):
-            print("Maximum number of iteration is reached! Solution did NOT converge!")
+            print("Maximum number of iteration in displacement solve is reached!")
+            print("Displacement solve did NOT converge!")
+            max_itr_reached = True
+            break # break out of the iteration loop
+    if(max_itr_reached):
+        break # break out of the load step loop
+      
+    #=====================================================================
+    # compute residual of the PF (phase field) governing equation
+    res_phi = solid_mechanics_model.compute_PF_residual(phi)
+
+    #=====================================================================
+    # update stiffness matrix of the PF (phase field) governing equation
+    K_phi = solid_mechanics_model.compute_PF_stiffness_matrix()  
+    
+    #=====================================================================
+    # Loop on iterations for the PF (phase field) governing equation
+    for k in range(itr_max):
+        
+        # compute residual of the phase field equation
+        res_phi= solid_mechanics_model.compute_PF_residual(phi)
+        
+        # calculate phase field vector increment
+        dphi = np.dot(inv(K_phi), -res_phi)        
+        
+        # update the phase field vector
+        phi = phi + dphi
+               
+        # update residual and check convergence
+        res_phi= solid_mechanics_model.compute_PF_residual(phi)        
+        tol = np.linalg.norm(res_phi)
+        
+        # printing iteration information
+        print("Phase field solve step {} - Iteration {} - tolerance = {}".format(l+1, k+1, tol))
+        if (tol < itr_tol):
+            print("Phase field solve converged!")
+            break # break out of the iteration loop to the next load step
+        if (k == itr_max-1):
+            print("Maximum number of iteration in displacement solve is reached!")
+            print("Phase field solve did NOT converge!")
             max_itr_reached = True
             break # break out of the iteration loop
     if(max_itr_reached):
@@ -184,6 +240,12 @@ for l in range(num_load_steps):
     
     #=====================================================================
     # write vtk file   
-    vtk_writer("./results", l, mesh, U)
-
-
+    vtk_writer("./results", l, mesh, U, phi, F_int)
+ 
+    
+    
+    
+    
+    
+    
+    

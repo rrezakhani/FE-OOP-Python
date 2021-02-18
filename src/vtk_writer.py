@@ -8,7 +8,7 @@
 
 import numpy as np
 
-def vtk_writer(path, l, mesh, U):   
+def vtk_writer(path, l, mesh, U, phi, F_int):   
 
     dim = mesh.get_dim()    
     num_nodes = mesh.get_num_nodes()    
@@ -63,7 +63,18 @@ def vtk_writer(path, l, mesh, U):
             f.write('\t\t\t\t\t'+str(U[2*i])+'\t'+str(U[2*i+1])+'\t'+'0.000\n')
         if (dim==3):
             f.write('\t\t\t\t\t'+str(U[3*i])+'\t'+str(U[3*i+1])+'\t'+str(U[3*i+2])+'n')
-    f.write('\t\t\t\t</DataArray>\n')   
+    f.write('\t\t\t\t</DataArray>\n')  
+    f.write('\t\t\t\t<DataArray type="Float32" Name="{}" Format="ascii">\n'.format('d'))    
+    for i in range(num_nodes):
+        f.write('\t\t\t\t\t'+str(phi[i])+'\n')
+    f.write('\t\t\t\t</DataArray>\n') 
+    f.write('\t\t\t\t<DataArray type="Float32" Name="{}" NumberOfComponents="3" Format="ascii">\n'.format('Fint'))    
+    for i in range(num_nodes):
+        if (dim==2):
+            f.write('\t\t\t\t\t'+str(F_int[2*i])+'\t'+str(F_int[2*i+1])+'\t'+'0.000\n')
+        if (dim==3):
+            f.write('\t\t\t\t\t'+str(F_int[3*i])+'\t'+str(F_int[3*i+1])+'\t'+str(F_int[3*i+2])+'n')
+    f.write('\t\t\t\t</DataArray>\n')  
     f.write('\t\t\t</PointData>\n')      
     
     ######## close the file ########

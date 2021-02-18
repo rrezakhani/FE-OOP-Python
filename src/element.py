@@ -76,9 +76,17 @@ class element:
                 # compute B matrix and Jacobian of the current element at current qp
                 B, J = self.compute_B_J_matrices(xi, eta)
                 
+                # compute element stress and strain increment and total values
                 self.strain_incr[p*3:(p+1)*3]  = np.dot(B, du_elem)
+                self.strain_total[p*3:(p+1)*3] += self.strain_incr[p*3:(p+1)*3]
                 self.stress_incr[p*3:(p+1)*3]  = np.dot(C, self.strain_incr[p*3:(p+1)*3])
                 self.stress_total[p*3:(p+1)*3] += self.stress_incr[p*3:(p+1)*3]
+                
+                # compute elastic strain energy at the current qp
+                self.elas_str_ene[p] = 0.5 * np.dot(self.strain_total[p*3:(p+1)*3], 
+                                                    self.stress_total[p*3:(p+1)*3])
+                
+                # compute element internal forces at current qp
                 F_int_elem_qp = np.dot(np.transpose(B), self.stress_total[p*3:(p+1)*3]) * w_qp[p] * np.linalg.det(J)
                 self.F_int_elem = self.F_int_elem + F_int_elem_qp
         
@@ -109,6 +117,7 @@ class element:
             return B, J
         
         def compute_qp_stress(self, u_elem, du_elem):
+            #RR link to material class goes here!
             return u_elem    
         
         def get_elem_connectivity(self):
