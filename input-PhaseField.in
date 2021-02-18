@@ -3,7 +3,7 @@ dim = 2
 two_dimensional_problem_type = plane_stress
 
 # material properties
-E = 3E+7
+E = 210000
 nu = 0.3
 Gc = 2.7
 el = 0.05
@@ -15,7 +15,7 @@ Dirichlet_BC = [0.0 1 'left']
 Dirichlet_BC = [0.0 2 'bottom']
 
 # mesh file
-mesh_path = ./mesh-files/single-quad.msh
+mesh_path = ./mesh-files/dogbone.msh
 
 # specify analysis type
 analysis_type = static

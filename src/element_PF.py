@@ -68,9 +68,9 @@ class element_PF:
                 N = self.get_shape_function(xi, eta)
                 
                 # update material property matrix
-                C = (1-np.dot(np.transpose(N),phi_elem))**2 * C
+                C_degraded = (1-np.dot(np.transpose(N),phi_elem))**2 * C
                 
-                K_elem_qp = np.dot(np.dot(np.transpose(B), C), B) * w_qp[p] * det(J0)
+                K_elem_qp = np.dot(np.dot(np.transpose(B), C_degraded), B) * w_qp[p] * det(J0)
                 self.K_elem = self.K_elem + K_elem_qp  
                 
             return self.K_elem
@@ -85,20 +85,29 @@ class element_PF:
                 
                 B, J = self.compute_B_J_matrices(xi, eta)
                 N = self.get_shape_function(xi, eta)
-                C = (1-np.dot(np.transpose(N),phi_elem))**2 * C
+                C_degraded = (1-np.dot(np.transpose(N),phi_elem))**2 * C
                 
-                # compute element stress and strain increment and total values
+                # compute element total and incremental strain
                 self.strain_incr[p*3:(p+1)*3]  = np.dot(B, du_elem)
-                self.strain_total[p*3:(p+1)*3] += self.strain_incr[p*3:(p+1)*3]
-                self.stress_incr[p*3:(p+1)*3]  = np.dot(C, self.strain_incr[p*3:(p+1)*3])
-                self.stress_total[p*3:(p+1)*3] += self.stress_incr[p*3:(p+1)*3]
+                #self.strain_total[p*3:(p+1)*3] += self.strain_incr[p*3:(p+1)*3]
+                self.strain_total[p*3:(p+1)*3] = np.dot(B, u_elem)
+                
+                # compute element total and incremental stress
+                self.stress_incr[p*3:(p+1)*3]  = np.dot(C_degraded, self.strain_incr[p*3:(p+1)*3])
+                #self.stress_total[p*3:(p+1)*3] += self.stress_incr[p*3:(p+1)*3]
+                self.stress_total[p*3:(p+1)*3] = np.dot(C_degraded, self.strain_total[p*3:(p+1)*3])
                 
                 # compute elastic strain energy at the current qp
-                self.elas_str_ene[p] = 0.5 * np.dot(self.strain_total[p*3:(p+1)*3], 
-                                                    self.stress_total[p*3:(p+1)*3])
+                self.elas_str_ene[p] = 0.5 * np.dot(np.dot(self.strain_total[p*3:(p+1)*3], C), 
+                                                    self.strain_total[p*3:(p+1)*3])
+                
+                #print(self.strain_total[p*3:(p+1)*3])
+                #print(self.stress_total[p*3:(p+1)*3])
+                #print(self.elas_str_ene[p])
                 
                 # compute element internal forces at current qp
-                F_int_elem_qp = np.dot(np.transpose(B), self.stress_total[p*3:(p+1)*3]) * w_qp[p] * np.linalg.det(J)
+                F_int_elem_qp = np.dot(np.transpose(B), self.stress_total[p*3:(p+1)*3]) \
+                                * w_qp[p] * np.linalg.det(J)
                 self.F_int_elem = self.F_int_elem + F_int_elem_qp    
                 
             return self.F_int_elem

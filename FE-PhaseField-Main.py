@@ -87,10 +87,11 @@ solid_mechanics_model = solid_mechanics_model(mat, mesh, dim)
 ##############################################################################
 # Initialize global displacement vector
 U = np.zeros(num_nodes*dim)
+dU = np.zeros(num_nodes*dim)
 
 ##############################################################################        
 # Construct global stiffness matrix
-K = solid_mechanics_model.construct_stiffness_matrix()
+#K = solid_mechanics_model.construct_stiffness_matrix()
 
 ##############################################################################
 # Boundary condition arrays
@@ -136,20 +137,29 @@ res = np.zeros(num_nodes*dim)
 F_ext_ = np.zeros(num_nodes*dim)
 u_bar_ = np.zeros(num_nodes*dim)
 
+vtk_writer("./results", '0', mesh, U, phi, F_int)
+
 for l in range(num_load_steps):
     
     #=====================================================================
     # update essential and neumann boundary conditions
-    u_bar_ = 1/num_load_steps * u_bar
+    u_bar_ += 1/num_load_steps * u_bar
     F_ext_ += 1/num_load_steps * F_ext
+    
+    #print(u_bar_)
+    #phi = np.zeros(num_nodes)
+        
+    # compute internal forces vector
+    #F_int = solid_mechanics_model.compute_PF_internal_forces(U, dU, phi)
+    
+    #=====================================================================
+    # update stiffness matrix of the displacement governing equation
+    K = solid_mechanics_model.update_PF_stiffness_matrix(phi)
+    #print(K)
     
     #=====================================================================
     # compute residual of the displacement governing equation
     res = F_ext_ + R_ext - F_int
-
-    #=====================================================================
-    # update stiffness matrix of the displacement governing equation
-    K = solid_mechanics_model.update_PF_stiffness_matrix(phi)
     
     #=====================================================================
     # Impose essential boundary conditions
@@ -170,18 +180,23 @@ for l in range(num_load_steps):
     for k in range(itr_max):
         
         # calculate displacement vector increment
-        dU = np.dot(inv(K_temp), res)    
+        U = np.dot(inv(K_temp), res)    
+        
+        #print(U)
         
         # update the reaction forces
+        # R_ext = np.zeros(num_nodes*dim)
         for m in range(num_nodes*dim):
             if(blocked[m]==1):
-                R_ext[m] += np.dot(K[m,:], dU)
+                R_ext[m] = np.dot(K[m,:], U)       
+        #print(R_ext)
         
         # update the displacement field
-        U = U + dU
+        #U = U + dU
                
         # compute internal forces vector
         F_int = solid_mechanics_model.compute_PF_internal_forces(U, dU, phi)
+        #print(F_int)
         
         # update residual and check convergence
         res = F_ext_ + R_ext - F_int        
@@ -212,9 +227,6 @@ for l in range(num_load_steps):
     # Loop on iterations for the PF (phase field) governing equation
     for k in range(itr_max):
         
-        # compute residual of the phase field equation
-        res_phi= solid_mechanics_model.compute_PF_residual(phi)
-        
         # calculate phase field vector increment
         dphi = np.dot(inv(K_phi), -res_phi)        
         
@@ -240,7 +252,7 @@ for l in range(num_load_steps):
     
     #=====================================================================
     # write vtk file   
-    vtk_writer("./results", l, mesh, U, phi, F_int)
+    vtk_writer("./results", l+1, mesh, U, phi, F_int)
  
     
     

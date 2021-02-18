@@ -50,8 +50,6 @@ class solid_mechanics_model:
             for i in range(len(Le)):
                 for j in range(len(Le)): 
                     K[Le[i]-1][Le[j]-1] = K[Le[i]-1][Le[j]-1] + K_elem[i][j]
-        
-        print('Stiffness matrix is constructed!')
         return K
     
     def compute_internal_forces(self, U, dU):
@@ -68,11 +66,28 @@ class solid_mechanics_model:
                 
             for i in range(len(Le)):
                 F_int[Le[i]-1] = F_int[Le[i]-1] + F_int_elem[i]
-
+                
         return F_int
     
     ##########################################################################
-    # PF (phase field) related methods
+    # PF (phase field) related methods    
+    def update_PF_stiffness_matrix(self, phi):        
+        num_nodes_total = self.mesh.get_num_nodes()
+        C = self.mat.get_C()
+        K = np.zeros((num_nodes_total*self.dim, num_nodes_total*self.dim))
+        
+        for elem_obj in self.elem_obj_list:                                    
+            # Updated element stiffness matrix
+            LePF = elem_obj.get_elem_PF_connectivity()
+            phi_elem = phi[LePF-1]
+            K_elem = elem_obj.update_element_stiffness(C, phi_elem)
+            Le = elem_obj.get_elem_connectivity()
+                
+            for i in range(len(Le)):
+                for j in range(len(Le)): 
+                    K[Le[i]-1][Le[j]-1] = K[Le[i]-1][Le[j]-1] + K_elem[i][j]
+        return K
+    
     def compute_PF_internal_forces(self, U, dU, phi):
         num_nodes_total = self.mesh.get_num_nodes()
         C = self.mat.get_C()
@@ -91,23 +106,6 @@ class solid_mechanics_model:
                 F_int[Le[i]-1] = F_int[Le[i]-1] + F_int_elem[i]
 
         return F_int
-    
-    def update_PF_stiffness_matrix(self, phi):        
-        num_nodes_total = self.mesh.get_num_nodes()
-        C = self.mat.get_C()
-        K = np.zeros((num_nodes_total*self.dim, num_nodes_total*self.dim))
-        
-        for elem_obj in self.elem_obj_list:                                    
-            # Updated element stiffness matrix
-            LePF = elem_obj.get_elem_PF_connectivity()
-            phi_elem = phi[LePF-1]
-            K_elem = elem_obj.update_element_stiffness(C, phi_elem)
-            Le = elem_obj.get_elem_connectivity()
-                
-            for i in range(len(Le)):
-                for j in range(len(Le)): 
-                    K[Le[i]-1][Le[j]-1] = K[Le[i]-1][Le[j]-1] + K_elem[i][j]
-        return K
     
     def compute_PF_residual(self, phi):
         num_nodes_total = self.mesh.get_num_nodes()
